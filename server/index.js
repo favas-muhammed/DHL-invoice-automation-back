@@ -38,12 +38,28 @@ async function extractTextFromPDF(pdfBuffer) {
 
 // Helper function to find data in PDF text
 function findDataInPDF(pdfText, searchTerm) {
-  // This is a simple implementation. You might need to adjust based on your PDF structure
   const lines = pdfText.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(searchTerm)) {
-      // Assuming the data2 is in the next line - adjust as needed
-      return lines[i + 1]?.trim() || "";
+      // Look for the last amount value before the next ID or end of section
+      let j = i;
+      let lastAmount = null;
+      while (j < lines.length) {
+        // Stop if we hit another ID or end of section
+        if (
+          j !== i &&
+          (lines[j].match(/\d{10}/) || lines[j].includes("Total facture"))
+        ) {
+          break;
+        }
+        // Look for amount pattern (numbers with 2 decimal places)
+        const amountMatch = lines[j].match(/(\d+\.\d{2})\s*$/);
+        if (amountMatch) {
+          lastAmount = amountMatch[1];
+        }
+        j++;
+      }
+      return lastAmount;
     }
   }
   return null;
@@ -123,7 +139,7 @@ app.post(
 
       res.status(statusCode).json({
         error: message,
-        success: false
+        success: false,
       });
     }
   }
