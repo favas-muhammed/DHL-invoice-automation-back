@@ -1,0 +1,33 @@
+{
+  "scripts": {
+    "start": "nodemon server/index.js",
+    "dev": "nodemon server/index.js",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@babel/core": "^7.26.0",
+    "async": "^3.2.6",
+    "axios": "^1.7.7",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "google-auth-library": "^9.15.0",
+    "googleapis": "^129.0.0",
+    "graphql": "^16.9.0",
+    "jest": "^29.7.0",
+    "lodash": "^4.17.21",
+    "mocha": "^10.8.2",
+    "moment": "^2.30.1",
+    "mongoose": "^8.8.2",
+    "multer": "^1.4.5-lts.1",
+    "node-sass": "^9.0.0",
+    "nodemon": "^3.1.7",
+    "passport": "^0.7.0",
+    "pdf-parse": "^1.1.1",
+    "pm2": "^5.4.3",
+    "socket.io": "^4.8.1",
+    "winston": "^3.17.0",
+    "xlsx": "^0.18.5"
+  }
+}
