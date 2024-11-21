@@ -68,19 +68,23 @@ function findDataInPDF(pdfText, searchTerm) {
 app.post(
   "/upload",
   upload.fields([
-    { name: "pdf", maxCount: 1 },
+    { name: "pdfs", maxCount: 10 }, // Allow up to 10 PDFs
     { name: "excel", maxCount: 1 },
   ]),
   async (req, res) => {
     try {
-      if (!req.files?.pdf || !req.files?.excel) {
-        const error = new Error("Both PDF and Excel files are required");
+      if (!req.files?.pdfs || !req.files?.excel) {
+        const error = new Error("At least one PDF and one Excel file are required");
         error.statusCode = 400;
         throw error;
       }
 
-      // 1. Extract text from PDF
-      const pdfText = await extractTextFromPDF(req.files.pdf[0].buffer);
+      // 1. Extract text from all PDFs
+      let combinedPdfText = "";
+      for (const pdfFile of req.files.pdfs) {
+        const pdfText = await extractTextFromPDF(pdfFile.buffer);
+        combinedPdfText += pdfText + "\n";
+      }
 
       // 2. Read Excel file
       const workbook = XLSX.read(req.files.excel[0].buffer);
@@ -94,7 +98,7 @@ app.post(
       for (let i = 1; i < rows.length; i++) {
         const searchTerm = rows[i][0]; // First column
         if (searchTerm) {
-          const foundData = findDataInPDF(pdfText, searchTerm);
+          const foundData = findDataInPDF(combinedPdfText, searchTerm);
           if (foundData) {
             rows[i][1] = foundData; // Update second column
             updates.push([searchTerm, foundData]);
