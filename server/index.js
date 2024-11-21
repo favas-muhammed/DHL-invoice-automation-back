@@ -79,7 +79,7 @@ function findDataInPDF(pdfText, searchTerm) {
 app.post(
   "/upload",
   upload.fields([
-    { name: "pdfs", maxCount: 10 }, // Allow up to 10 PDFs
+    { name: "pdfs", maxCount: 100 }, // Allow up to 100 PDFs
     { name: "excel", maxCount: 1 },
   ]),
   async (req, res) => {
