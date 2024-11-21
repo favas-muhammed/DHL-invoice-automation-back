@@ -51,6 +51,7 @@ function findDataInPDF(pdfText, searchTerm) {
       // Look for the last amount value before the next ID or end of section
       let j = i;
       let lastAmount = null;
+      let previousAmount = null;
       while (j < lines.length) {
         // Stop if we hit another ID or end of section
         if (
@@ -64,8 +65,14 @@ function findDataInPDF(pdfText, searchTerm) {
           /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
         );
         if (amountMatch) {
+          // Store the previous amount before updating lastAmount
+          previousAmount = lastAmount;
           // Remove commas and convert to number
           lastAmount = amountMatch[1].replace(/,/g, "");
+        }
+        // If we hit a Sous-Total Service line, use the previous amount instead
+        if (lines[j].startsWith('Sous-Total Service') && previousAmount) {
+          return formatAmount(previousAmount);
         }
         j++;
       }
