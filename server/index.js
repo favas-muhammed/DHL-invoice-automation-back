@@ -83,8 +83,73 @@ function findDataInPDF(pdfText, searchTerm) {
   return null;
 }
 
-app.post(
-  "/upload",
+// Helper function to process Excel and add separator rows
+async function processExcelWithSeparators(buffer, referenceColumn) {
+  const workbook = XLSX.read(buffer);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+  // Convert column letter to index (e.g., 'A' -> 0, 'B' -> 1, 'AA' -> 26)
+  const colIndex = referenceColumn.split('').reduce((acc, char) => 
+    acc * 26 + char.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0) + 1, 0) - 1;
+
+  const newRows = [];
+  let currentGroup = null;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const value = row[colIndex];
+
+    if (currentGroup !== value) {
+      // Add two empty rows between groups (except at the start)
+      if (currentGroup !== null) {
+        newRows.push(Array(row.length).fill(""));
+        newRows.push(Array(row.length).fill(""));
+      }
+      currentGroup = value;
+    }
+    newRows.push(row);
+  }
+
+  // Create new workbook with processed rows
+  const newWorkbook = XLSX.utils.book_new();
+  const newWorksheet = XLSX.utils.aoa_to_sheet(newRows);
+  XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
+
+  return XLSX.write(newWorkbook, { type: "buffer", bookType: "xlsx" });
+}
+
+app.post("/process-excel", upload.single("excel"), async (req, res) => {
+  try {
+    if (!req.file || !req.body.referenceColumn) {
+      throw new Error("Excel file and reference column are required");
+    }
+
+    const processedBuffer = await processExcelWithSeparators(
+      req.file.buffer,
+      req.body.referenceColumn
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      "attachment; filename=processed_excel.xlsx"
+    );
+    res.send(processedBuffer);
+  } catch (error) {
+    console.error("Error processing Excel:", error);
+    res.status(400).json({
+      error: error.message,
+      success: false,
+    });
+  }
+});
+
+app.post("/upload",
   upload.fields([
     { name: "pdfs", maxCount: 100 }, // Allow up to 100 PDFs
     { name: "excel", maxCount: 1 },
