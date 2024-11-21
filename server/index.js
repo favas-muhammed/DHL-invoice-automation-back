@@ -74,7 +74,9 @@ app.post(
   async (req, res) => {
     try {
       if (!req.files?.pdfs || !req.files?.excel) {
-        const error = new Error("At least one PDF and one Excel file are required");
+        const error = new Error(
+          "At least one PDF and one Excel file are required"
+        );
         error.statusCode = 400;
         throw error;
       }
