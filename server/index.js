@@ -35,7 +35,14 @@ async function extractTextFromPDF(pdfBuffer) {
     throw new Error("Failed to extract text from PDF: " + error.message);
   }
 }
-
+function formatAmount(amount) {
+  // Convert amount to a number and format it with commas
+  const number = parseFloat(amount);
+  return number.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
 // Helper function to find data in PDF text
 function findDataInPDF(pdfText, searchTerm) {
   const lines = pdfText.split("\n");
@@ -52,16 +59,20 @@ function findDataInPDF(pdfText, searchTerm) {
         ) {
           break;
         }
-        // Look for amount pattern (numbers with 2 decimal places)
-        const amountMatch = lines[j].match(/(\d+\.\d{2})\s*$/);
+        // Look for amount pattern (numbers with optional comma and 2 decimal places)
+        const amountMatch = lines[j].match(
+          /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
+        );
         if (amountMatch) {
-          lastAmount = amountMatch[1];
+          // Remove commas and convert to number
+          lastAmount = amountMatch[1].replace(/,/g, "");
         }
         j++;
       }
-      return lastAmount;
+      return lastAmount ? formatAmount(lastAmount) : null;
     }
   }
+
   return null;
 }
 
