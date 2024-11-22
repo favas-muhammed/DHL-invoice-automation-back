@@ -84,7 +84,7 @@ function findDataInPDF(pdfText, searchTerm) {
 }
 
 // Helper function to process Excel and add separator rows
-async function processExcelWithSeparators(buffer, referenceColumn) {
+async function processExcelWithSeparators(buffer, referenceColumn, calculateTotals = false, totalColumn = "") {
   const workbook = XLSX.read(buffer);
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
@@ -112,6 +112,38 @@ async function processExcelWithSeparators(buffer, referenceColumn) {
     newRows.push(row);
   }
 
+  // Calculate totals for each group if requested
+  if (calculateTotals) {
+    let startIndex = 0;
+    let currentGroup = null;
+
+    for (let i = 0; i < newRows.length; i++) {
+      const value = newRows[i][colIndex];
+      
+      // If we hit an empty row or the end of the array, calculate total
+      if (value === "" || i === newRows.length - 1) {
+        if (startIndex < i) {
+          let total = 0;
+          // Sum up the values in the specified column
+          for (let j = startIndex; j < i; j++) {
+            const cellValue = newRows[j][colIndex];
+            if (cellValue && !isNaN(parseFloat(cellValue))) {
+              total += parseFloat(cellValue);
+            }
+          }
+          // Add total row if we have a valid total
+          if (total > 0) {
+            const totalRow = Array(newRows[0].length).fill("");
+            totalRow[colIndex] = `Total: ${total.toFixed(2)}`;
+            newRows.splice(i, 0, totalRow);
+            i++; // Skip the newly inserted row
+          }
+        }
+        startIndex = i + 1;
+      }
+    }
+  }
+
   // Create new workbook with processed rows
   const newWorkbook = XLSX.utils.book_new();
   const newWorksheet = XLSX.utils.aoa_to_sheet(newRows);
@@ -128,7 +160,9 @@ app.post("/process-excel", upload.single("excel"), async (req, res) => {
 
     const processedBuffer = await processExcelWithSeparators(
       req.file.buffer,
-      req.body.referenceColumn
+      req.body.referenceColumn,
+      req.body.calculateTotals === 'true',
+      req.body.totalColumn
     );
 
     res.setHeader(
