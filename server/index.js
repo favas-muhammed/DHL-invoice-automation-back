@@ -35,6 +35,7 @@ async function extractTextFromPDF(pdfBuffer) {
     throw new Error("Failed to extract text from PDF: " + error.message);
   }
 }
+
 function formatAmount(amount) {
   // Convert amount to a number and format it with commas
   const number = parseFloat(amount);
@@ -43,6 +44,7 @@ function formatAmount(amount) {
     maximumFractionDigits: 2,
   });
 }
+
 // Helper function to find data in PDF text
 function findDataInPDF(pdfText, searchTerm) {
   const lines = pdfText.split("\n");
@@ -71,7 +73,7 @@ function findDataInPDF(pdfText, searchTerm) {
           lastAmount = amountMatch[1].replace(/,/g, "");
         }
         // If we hit a Sous-Total Service line, use the previous amount instead
-        if (lines[j].startsWith('Sous-Total Service') && previousAmount) {
+        if (lines[j].startsWith("Sous-Total Service") && previousAmount) {
           return formatAmount(previousAmount);
         }
         j++;
@@ -83,23 +85,43 @@ function findDataInPDF(pdfText, searchTerm) {
   return null;
 }
 
+// Helper function to convert column letter to index
+function columnToIndex(column) {
+  return (
+    column
+      .split("")
+      .reduce(
+        (acc, char) =>
+          acc * 26 + char.toUpperCase().charCodeAt(0) - "A".charCodeAt(0) + 1,
+        0
+      ) - 1
+  );
+}
+
 // Helper function to process Excel and add separator rows
-async function processExcelWithSeparators(buffer, referenceColumn, calculateTotals = false, totalColumn = "") {
+async function processExcelWithSeparators(
+  buffer,
+  referenceColumn,
+  calculateTotals = false,
+  totalColumn = ""
+) {
   const workbook = XLSX.read(buffer);
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-  // Convert column letter to index (e.g., 'A' -> 0, 'B' -> 1, 'AA' -> 26)
-  const colIndex = referenceColumn.split('').reduce((acc, char) => 
-    acc * 26 + char.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0) + 1, 0) - 1;
+  // Convert column letters to indices
+  const refColIndex = columnToIndex(referenceColumn);
+  const totalColIndex = calculateTotals
+    ? columnToIndex(totalColumn)
+    : refColIndex;
 
   const newRows = [];
   let currentGroup = null;
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const value = row[colIndex];
+    const value = row[refColIndex];
 
     if (currentGroup !== value) {
       // Add two empty rows between groups (except at the start)
@@ -113,20 +135,20 @@ async function processExcelWithSeparators(buffer, referenceColumn, calculateTota
   }
 
   // Calculate totals for each group if requested
-  if (calculateTotals) {
+  if (calculateTotals && totalColumn) {
     let startIndex = 0;
     let currentGroup = null;
 
     for (let i = 0; i < newRows.length; i++) {
-      const value = newRows[i][colIndex];
-      
+      const value = newRows[i][refColIndex];
+
       // If we hit an empty row or the end of the array, calculate total
       if (value === "" || i === newRows.length - 1) {
         if (startIndex < i) {
           let total = 0;
-          // Sum up the values in the specified column
+          // Sum up the values in the specified total column
           for (let j = startIndex; j < i; j++) {
-            const cellValue = newRows[j][colIndex];
+            const cellValue = newRows[j][totalColIndex];
             if (cellValue && !isNaN(parseFloat(cellValue))) {
               total += parseFloat(cellValue);
             }
@@ -134,7 +156,7 @@ async function processExcelWithSeparators(buffer, referenceColumn, calculateTota
           // Add total row if we have a valid total
           if (total > 0) {
             const totalRow = Array(newRows[0].length).fill("");
-            totalRow[colIndex] = `Total: ${total.toFixed(2)}`;
+            totalRow[totalColIndex] = total.toFixed(2);
             newRows.splice(i, 0, totalRow);
             i++; // Skip the newly inserted row
           }
@@ -161,7 +183,7 @@ app.post("/process-excel", upload.single("excel"), async (req, res) => {
     const processedBuffer = await processExcelWithSeparators(
       req.file.buffer,
       req.body.referenceColumn,
-      req.body.calculateTotals === 'true',
+      req.body.calculateTotals === "true",
       req.body.totalColumn
     );
 
@@ -183,7 +205,8 @@ app.post("/process-excel", upload.single("excel"), async (req, res) => {
   }
 });
 
-app.post("/upload",
+app.post(
+  "/upload",
   upload.fields([
     { name: "pdfs", maxCount: 100 }, // Allow up to 100 PDFs
     { name: "excel", maxCount: 1 },
