@@ -12,21 +12,19 @@ const port = process.env.PORT || 5000;
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // Allow requests from this origin
-    methods: ["GET", "POST"], // Specify allowed methods
-    credentials: true, // Allow credentials if needed
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true,
   })
 );
 
 app.use(express.json());
 
-// Configure multer for PDF uploads
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-// Helper function to extract text from PDF
 async function extractTextFromPDF(pdfBuffer) {
   try {
     const data = await pdfParse(pdfBuffer);
@@ -37,7 +35,6 @@ async function extractTextFromPDF(pdfBuffer) {
 }
 
 function formatAmount(amount) {
-  // Convert amount to a number and format it with commas
   const number = parseFloat(amount);
   return number.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -45,34 +42,27 @@ function formatAmount(amount) {
   });
 }
 
-// Helper function to find data in PDF text
 function findDataInPDF(pdfText, searchTerm) {
   const lines = pdfText.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(searchTerm)) {
-      // Look for the last amount value before the next ID or end of section
       let j = i;
       let lastAmount = null;
       let previousAmount = null;
       while (j < lines.length) {
-        // Stop if we hit another ID or end of section
         if (
           j !== i &&
           (lines[j].match(/\d{10}/) || lines[j].includes("Total facture"))
         ) {
           break;
         }
-        // Look for amount pattern (numbers with optional comma and 2 decimal places)
         const amountMatch = lines[j].match(
           /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
         );
         if (amountMatch) {
-          // Store the previous amount before updating lastAmount
           previousAmount = lastAmount;
-          // Remove commas and convert to number
           lastAmount = amountMatch[1].replace(/,/g, "");
         }
-        // If we hit a Sous-Total Service line, use the previous amount instead
         if (lines[j].startsWith("Sous-Total Service") && previousAmount) {
           return formatAmount(previousAmount);
         }
@@ -81,11 +71,9 @@ function findDataInPDF(pdfText, searchTerm) {
       return lastAmount ? formatAmount(lastAmount) : null;
     }
   }
-
   return null;
 }
 
-// Helper function to convert column letter to index
 function columnToIndex(column) {
   return (
     column
@@ -98,7 +86,6 @@ function columnToIndex(column) {
   );
 }
 
-// Helper function to process Excel and add separator rows
 async function processExcelWithSeparators(
   buffer,
   referenceColumn,
@@ -110,7 +97,6 @@ async function processExcelWithSeparators(
   const worksheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-  // Convert column letters to indices
   const refColIndex = columnToIndex(referenceColumn);
   const totalColIndex = calculateTotals
     ? columnToIndex(totalColumn)
@@ -124,7 +110,6 @@ async function processExcelWithSeparators(
     const value = row[refColIndex];
 
     if (currentGroup !== value) {
-      // Add two empty rows between groups (except at the start)
       if (currentGroup !== null) {
         newRows.push(Array(row.length).fill(""));
         newRows.push(Array(row.length).fill(""));
@@ -134,7 +119,6 @@ async function processExcelWithSeparators(
     newRows.push(row);
   }
 
-  // Calculate totals for each group if requested
   if (calculateTotals && totalColumn) {
     let startIndex = 0;
     let currentGroup = null;
@@ -142,23 +126,20 @@ async function processExcelWithSeparators(
     for (let i = 0; i < newRows.length; i++) {
       const value = newRows[i][refColIndex];
 
-      // If we hit an empty row or the end of the array, calculate total
       if (value === "" || i === newRows.length - 1) {
         if (startIndex < i) {
           let total = 0;
-          // Sum up the values in the specified total column
           for (let j = startIndex; j < i; j++) {
             const cellValue = newRows[j][totalColIndex];
             if (cellValue && !isNaN(parseFloat(cellValue))) {
               total += parseFloat(cellValue);
             }
           }
-          // Add total row if we have a valid total
           if (total > 0) {
             const totalRow = Array(newRows[0].length).fill("");
             totalRow[totalColIndex] = total.toFixed(2);
             newRows.splice(i, 0, totalRow);
-            i++; // Skip the newly inserted row
+            i++;
           }
         }
         startIndex = i + 1;
@@ -166,7 +147,6 @@ async function processExcelWithSeparators(
     }
   }
 
-  // Create new workbook with processed rows
   const newWorkbook = XLSX.utils.book_new();
   const newWorksheet = XLSX.utils.aoa_to_sheet(newRows);
   XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
@@ -208,7 +188,7 @@ app.post("/process-excel", upload.single("excel"), async (req, res) => {
 app.post(
   "/upload",
   upload.fields([
-    { name: "pdfs", maxCount: 100 }, // Allow up to 100 PDFs
+    { name: "pdfs", maxCount: 100 },
     { name: "excel", maxCount: 1 },
   ]),
   async (req, res) => {
@@ -221,45 +201,55 @@ app.post(
         throw error;
       }
 
-      // 1. Extract text from all PDFs
       let combinedPdfText = "";
       for (const pdfFile of req.files.pdfs) {
         const pdfText = await extractTextFromPDF(pdfFile.buffer);
         combinedPdfText += pdfText + "\n";
       }
 
-      // 2. Read Excel file
       const workbook = XLSX.read(req.files.excel[0].buffer);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
+      // Add the new column headers
+      if (rows.length > 0) {
+        const lastColIndex = rows[0].length;
+        rows[0][lastColIndex] = "Ratio";
+        rows[0][lastColIndex + 1] = "Shipping cost per item - actual amount";
+        rows[0][lastColIndex + 2] = "Shipping cost - paid by client";
+        rows[0][lastColIndex + 3] = "Shipping cost - gain/ loss";
+      }
+
+      // Ensure all rows have the same length
+      for (let i = 1; i < rows.length; i++) {
+        while (rows[i].length < rows[0].length) {
+          rows[i].push(""); // Add empty cells for new columns
+        }
+      }
+
       const updates = [];
 
-      // 3. Process each row (skip header)
       for (let i = 1; i < rows.length; i++) {
-        const searchTerm = rows[i][0]; // First column
+        const searchTerm = rows[i][0];
         if (searchTerm) {
           const foundData = findDataInPDF(combinedPdfText, searchTerm);
           if (foundData) {
-            rows[i][1] = foundData; // Update second column
+            rows[i][1] = foundData;
             updates.push([searchTerm, foundData]);
           }
         }
       }
 
-      // 4. Write back to Excel
       const newWorkbook = XLSX.utils.book_new();
       const newWorksheet = XLSX.utils.aoa_to_sheet(rows);
       XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
 
-      // 5. Generate Excel file
       const excelBuffer = XLSX.write(newWorkbook, {
         type: "buffer",
         bookType: "xlsx",
       });
 
-      // 6. Send the updated Excel file back to client
       res.setHeader(
         "Content-Type",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -274,7 +264,6 @@ app.post(
       const statusCode = error.statusCode || 500;
       let message = "Internal server error while processing upload";
 
-      // Handle specific error cases
       if (error.code === "LIMIT_FILE_SIZE") {
         message = "File size too large. Maximum size is 10MB";
       } else if (error.message.includes("Failed to extract text from PDF")) {
@@ -291,14 +280,12 @@ app.post(
   }
 );
 
-// Error handling middleware should be last
 app.use(errorHandler);
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
 
-// Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
   console.error("Unhandled Promise Rejection:", err);
   process.exit(1);
