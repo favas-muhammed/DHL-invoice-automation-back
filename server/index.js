@@ -46,29 +46,20 @@ function findDataInPDF(pdfText, searchTerm) {
   const lines = pdfText.split("\n");
   for (let i = 0; i < lines.length; i++) {
     if (lines[i].includes(searchTerm)) {
-      let j = i;
-      let lastAmount = null;
-      let previousAmount = null;
-      while (j < lines.length) {
-        if (
-          j !== i &&
-          (lines[j].match(/\d{10}/) || lines[j].includes("Total facture"))
-        ) {
-          break;
-        }
-        const amountMatch = lines[j].match(
-          /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
-        );
-        if (amountMatch) {
-          previousAmount = lastAmount;
-          lastAmount = amountMatch[1].replace(/,/g, "");
-        }
-        if (lines[j].startsWith("Sous-Total Service") && previousAmount) {
-          return formatAmount(previousAmount);
-        }
-        j++;
+      const seventhLine = lines[i + 6]; // 7th line
+      const eighthLine = lines[i + 7]; // 8th line
+      const amountMatch7 = seventhLine.match(
+        /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
+      );
+      const amountMatch8 = eighthLine.match(
+        /(\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})\s*$/
+      );
+
+      if (amountMatch7) {
+        return formatAmount(amountMatch7[1].replace(/,/g, ""));
+      } else if (amountMatch8) {
+        return formatAmount(amountMatch8[1].replace(/,/g, ""));
       }
-      return lastAmount ? formatAmount(lastAmount) : null;
     }
   }
   return null;
